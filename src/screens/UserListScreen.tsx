@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SectionList, TouchableOpacity, Modal } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, SectionList, TouchableOpacity, Modal, RefreshControl } from 'react-native';
+import PagerView from 'react-native-pager-view';
 import { getRealm, User } from '../database/UserModel';
 import UserTabs from '../components/UserTabs';
 import CreateUserScreen from './CreateUserScreen';
@@ -20,19 +21,18 @@ function groupUsersAlphabetically(users: User[]) {
 export default function UserListScreen() {
   const [users, setUsers] = useState<User[]>([]);
   const [tab, setTab] = useState<'All' | 'Admin' | 'Manager'>('All');
+  const [activeTabIdx, setActiveTabIdx] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState('');
   const [editUser, setEditUser] = useState<User | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const pagerRef = useRef<PagerView>(null);
 
-  useEffect(() => {
-    const loadUsers = async () => {
-      const realm = await getRealm();
-      let realmUsers = realm.objects<User>('User');
-      // DEVELOPMENT ONLY: Clear all users before seeding
-    //   realm.write(() => {
-    //     realm.delete(realm.objects('User'));
-    //   });
-      // Now seed fresh data
+  const loadUsers = async () => {
+    const realm = await getRealm();
+    let realmUsers = realm.objects<User>('User');
+    // Only seed if DB is empty
+    if (realmUsers.length === 0) {
       realm.write(() => {
         const seedUsers = [
           { id: '1', name: 'Alice Smith', email: 'alice@zeller.com', type: 'Admin' },
@@ -65,53 +65,95 @@ export default function UserListScreen() {
         seedUsers.forEach(u => realm.create('User', u));
       });
       realmUsers = realm.objects<User>('User');
-      setUsers(Array.from(realmUsers));
-    };
+    }
+    setUsers(Array.from(realmUsers));
+  };
+
+  useEffect(() => {
     loadUsers();
   }, []);
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    // Simulate 2-3s refresh for UX
+    const refreshTimeout = setTimeout(() => {
+      setRefreshing(false);
+    }, 2200);
+    try {
+      await loadUsers();
+    } finally {
+      clearTimeout(refreshTimeout);
+      setRefreshing(false);
+    }
+  };
+
   const handleTabChange = (tab: string) => {
     setTab(tab as 'All' | 'Admin' | 'Manager');
+    const idx = tab === 'All' ? 0 : tab === 'Admin' ? 1 : 2;
+    setActiveTabIdx(idx);
+    pagerRef.current?.setPage(idx);
   };
 
   const handleSearch = (query: string) => {
     setSearch(query);
   };
 
-  const filteredUsers = users.filter(u => {
-    const matchesTab = tab === 'All' ? true : u.type === tab;
-    const matchesSearch = search.trim() === '' || u.name.toLowerCase().includes(search.trim().toLowerCase());
-    return matchesTab && matchesSearch;
-  });
-  const sections = groupUsersAlphabetically(filteredUsers);
+
+  const getFilteredUsers = (tabType: 'All' | 'Admin' | 'Manager') => {
+    return users.filter(u => {
+      const matchesTab = tabType === 'All' ? true : u.type === tabType;
+      const matchesSearch = search.trim() === '' || u.name.toLowerCase().includes(search.trim().toLowerCase());
+      return matchesTab && matchesSearch;
+    });
+  };
 
   return (
     <View style={styles.container}>
-      <UserTabs onTabChange={handleTabChange} onSearch={handleSearch} />
-      <SectionList
-        sections={sections}
-        keyExtractor={item => item.id}
-        renderSectionHeader={({ section: { title } }) => (
-          <Text style={styles.sectionHeader}>{title}</Text>
-        )}
-        renderItem={({ item }) => (
-          <TouchableOpacity onPress={() => setEditUser(item)}>
-            <View style={styles.userItemFlat}>
-              <View style={styles.avatarFlat}>
-                <Text style={styles.avatarFlatText}>{item.name.charAt(0).toUpperCase()}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.userNameFlat}>{item.name}</Text>
-              </View>
-              {item.type === 'Admin' && (
-                <Text style={styles.userTypeFlat}>Admin</Text>
+  <UserTabs onTabChange={handleTabChange} onSearch={handleSearch} activeTab={activeTabIdx} />
+      <PagerView
+        style={{ flex: 1 }}
+        initialPage={0}
+        ref={pagerRef}
+        onPageSelected={e => {
+          const idx = e.nativeEvent.position;
+          setActiveTabIdx(idx);
+          if (idx === 0) setTab('All');
+          else if (idx === 1) setTab('Admin');
+          else setTab('Manager');
+        }}
+      >
+        {['All', 'Admin', 'Manager'].map((tabType, idx) => (
+          <View key={tabType} style={{ flex: 1 }}>
+            <SectionList
+              sections={groupUsersAlphabetically(getFilteredUsers(tabType as 'All' | 'Admin' | 'Manager'))}
+              keyExtractor={item => item.id}
+              renderSectionHeader={({ section: { title } }) => (
+                <Text style={styles.sectionHeader}>{title}</Text>
               )}
-            </View>
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={<Text style={styles.placeholder}>No users found.</Text>}
-        style={{ width: '100%' }}
-      />
+              renderItem={({ item }) => (
+                <TouchableOpacity onPress={() => setEditUser(item)}>
+                  <View style={styles.userItemFlat}>
+                    <View style={styles.avatarFlat}>
+                      <Text style={styles.avatarFlatText}>{item.name.charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.userNameFlat}>{item.name}</Text>
+                    </View>
+                    {item.type === 'Admin' && (
+                      <Text style={styles.userTypeFlat}>Admin</Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={<Text style={styles.placeholder}>No users found.</Text>}
+              style={{ width: '100%' }}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+            />
+          </View>
+        ))}
+      </PagerView>
       <TouchableOpacity style={styles.fab} onPress={() => setShowCreate(true)}>
         <Text style={styles.fabIcon}>+</Text>
       </TouchableOpacity>
@@ -139,14 +181,14 @@ export default function UserListScreen() {
           <EditUserScreen
             user={editUser}
             onClose={() => setEditUser(null)}
-            onSave={updated => {
+            onSave={(updated: { firstName: string; lastName: string; email: string; role: string }) => {
               getRealm().then(realm => {
                 realm.write(() => {
                   const u = realm.objectForPrimaryKey<User>('User', editUser.id);
                   if (u) {
                     u.name = `${updated.firstName} ${updated.lastName}`;
                     u.email = updated.email;
-                    u.type = updated.role;
+                    u.type = updated.role as User['type'];
                   }
                   setUsers(Array.from(realm.objects<User>('User')));
                 });
