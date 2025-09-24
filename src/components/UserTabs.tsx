@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 const TABS = ['All', 'Admin', 'Manager'];
 
@@ -25,7 +25,7 @@ export default function UserTabs({ onTabChange }: { onTabChange: (tab: string) =
         </TouchableOpacity>
       ))}
       <TouchableOpacity style={styles.searchIcon}>
-        <Ionicons name="search" size={24} color="#333" />
+        <Icon name="search" size={24} color="#333" />
       </TouchableOpacity>
       <Animated.View
         style={[styles.indicator, { left: activeTab * 80 }]}
