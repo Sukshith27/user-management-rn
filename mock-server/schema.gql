@@ -1,0 +1,5 @@
+type Query {
+  listZellerCustomers: [ZellerCustomer]
+}
+
+# ...existing schema from reference...
