@@ -9,6 +9,33 @@ export default function CreateUserScreen({ onClose, onCreate }: { onClose: () =>
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'Admin' | 'Manager'>('Admin');
+  const [error, setError] = useState<string | null>(null);
+
+  function validate() {
+    if (!firstName.trim() || !lastName.trim()) {
+      return 'Name cannot be empty.';
+    }
+    if (!/^[A-Za-z ]+$/.test(firstName) || !/^[A-Za-z ]+$/.test(lastName)) {
+      return 'Name can only contain alphabets and spaces.';
+    }
+    if (firstName.length > 50 || lastName.length > 50) {
+      return 'Name must not exceed 50 characters.';
+    }
+    if (email && !/^\S+@\S+\.\S+$/.test(email)) {
+      return 'Email is not valid.';
+    }
+    return null;
+  }
+
+  function handleCreate() {
+    const err = validate();
+    if (err) {
+      setError(err);
+      return;
+    }
+    setError(null);
+    onCreate({ firstName, lastName, email, role });
+  }
 
   return (
     <View style={styles.container}>
@@ -16,6 +43,7 @@ export default function CreateUserScreen({ onClose, onCreate }: { onClose: () =>
         <Icon name="close" size={28} color="#333" />
       </TouchableOpacity>
       <Text style={styles.headline}>New User</Text>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
       <TextInput
         style={styles.input}
         placeholder="First Name"
@@ -47,7 +75,7 @@ export default function CreateUserScreen({ onClose, onCreate }: { onClose: () =>
           </TouchableOpacity>
         ))}
       </View>
-      <TouchableOpacity style={styles.createBtn} onPress={() => onCreate({ firstName, lastName, email, role })}>
+      <TouchableOpacity style={styles.createBtn} onPress={handleCreate}>
         <Text style={styles.createBtnText}>Create User</Text>
       </TouchableOpacity>
     </View>
@@ -116,5 +144,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  error: {
+    color: 'red',
+    fontSize: 15,
+    marginBottom: 12,
+    textAlign: 'center',
   },
 });
