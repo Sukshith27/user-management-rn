@@ -4,14 +4,30 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, Animated } from 'r
 const TABS = ['All', 'Admin', 'Manager'];
 const TAB_WIDTH = 100;
 
-export default function UserTabs({ onTabChange, onSearch }: { onTabChange: (tab: string) => void, onSearch: (query: string) => void }) {
-  const [activeTab, setActiveTab] = useState(0);
+type UserTabsProps = {
+  onTabChange: (tab: string) => void;
+  onSearch: (query: string) => void;
+  activeTab?: number;
+};
+
+export default function UserTabs({ onTabChange, onSearch, activeTab = 0 }: UserTabsProps) {
+  const [internalTab, setInternalTab] = useState(0);
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const indicator = useRef(new Animated.Value(0)).current;
 
+  // Sync tab indicator with pager
+  React.useEffect(() => {
+    setInternalTab(activeTab);
+    Animated.timing(indicator, {
+      toValue: activeTab * TAB_WIDTH,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [activeTab]);
+
   const handleTabPress = (index: number) => {
-    setActiveTab(index);
+    setInternalTab(index);
     Animated.timing(indicator, {
       toValue: index * TAB_WIDTH,
       duration: 300,
@@ -26,7 +42,7 @@ export default function UserTabs({ onTabChange, onSearch }: { onTabChange: (tab:
         <View style={styles.tabsContainer}>
           {TABS.map((tab, idx) => (
             <TouchableOpacity key={tab} style={styles.tab} onPress={() => handleTabPress(idx)}>
-              <Text style={[styles.tabText, activeTab === idx && styles.activeTabText]}>{tab}</Text>
+              <Text style={[styles.tabText, internalTab === idx && styles.activeTabText]}>{tab}</Text>
             </TouchableOpacity>
           ))}
           <Animated.View

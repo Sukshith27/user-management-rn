@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, SectionList, TouchableOpacity, Modal, RefreshControl } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { getRealm, User } from '../database/UserModel';
+import { fetchZellerCustomers } from '../api/zellerGraphQL';
 import UserTabs from '../components/UserTabs';
 import CreateUserScreen from './CreateUserScreen';
 import EditUserScreen from './EditUserScreen';
@@ -33,38 +34,25 @@ export default function UserListScreen() {
     let realmUsers = realm.objects<User>('User');
     // Only seed if DB is empty
     if (realmUsers.length === 0) {
-      realm.write(() => {
-        const seedUsers = [
-          { id: '1', name: 'Alice Smith', email: 'alice@zeller.com', type: 'Admin' },
-          { id: '2', name: 'Bob Johnson', email: 'bob@zeller.com', type: 'Manager' },
-          { id: '3', name: 'Charlie Brown', email: 'charlie@zeller.com', type: 'Admin' },
-          { id: '4', name: 'Diana Prince', email: 'diana@zeller.com', type: 'Manager' },
-          { id: '5', name: 'Ethan Hunt', email: 'ethan@zeller.com', type: 'Admin' },
-          { id: '6', name: 'Fiona Gallagher', email: 'fiona@zeller.com', type: 'Manager' },
-          { id: '7', name: 'George Clooney', email: 'george@zeller.com', type: 'Admin' },
-          { id: '8', name: 'Hannah Lee', email: 'hannah@zeller.com', type: 'Manager' },
-          { id: '9', name: 'Ian Somerhalder', email: 'ian@zeller.com', type: 'Admin' },
-          { id: '10', name: 'Julia Roberts', email: 'julia@zeller.com', type: 'Manager' },
-          { id: '11', name: 'Kevin Hart', email: 'kevin@zeller.com', type: 'Admin' },
-          { id: '12', name: 'Linda Carter', email: 'linda@zeller.com', type: 'Manager' },
-          { id: '13', name: 'Michael Jordan', email: 'michael@zeller.com', type: 'Admin' },
-          { id: '14', name: 'Nina Dobrev', email: 'nina@zeller.com', type: 'Manager' },
-          { id: '15', name: 'Oscar Isaac', email: 'oscar@zeller.com', type: 'Admin' },
-          { id: '16', name: 'Paula Abdul', email: 'paula@zeller.com', type: 'Manager' },
-          { id: '17', name: 'Quentin Tarantino', email: 'quentin@zeller.com', type: 'Admin' },
-          { id: '18', name: 'Rachel Green', email: 'rachel@zeller.com', type: 'Manager' },
-          { id: '19', name: 'Steve Jobs', email: 'steve@zeller.com', type: 'Admin' },
-          { id: '20', name: 'Tom Hanks', email: 'tom@zeller.com', type: 'Manager' },
-          { id: '21', name: 'Uma Thurman', email: 'uma@zeller.com', type: 'Admin' },
-          { id: '22', name: 'Victor Hugo', email: 'victor@zeller.com', type: 'Manager' },
-          { id: '23', name: 'Wendy Darling', email: 'wendy@zeller.com', type: 'Admin' },
-          { id: '24', name: 'Xander Cage', email: 'xander@zeller.com', type: 'Manager' },
-          { id: '25', name: 'Yara Shahidi', email: 'yara@zeller.com', type: 'Admin' },
-          { id: '26', name: 'Zoe Saldana', email: 'zoe@zeller.com', type: 'Manager' },
-        ];
-        seedUsers.forEach(u => realm.create('User', u));
-      });
-      realmUsers = realm.objects<User>('User');
+
+      // Fetch from GraphQL API
+      try {
+        const apiUsers = await fetchZellerCustomers();
+        realm.write(() => {
+          apiUsers.forEach((u: any) => {
+            realm.create('User', {
+              id: u.id,
+              name: u.name,
+              email: u.email,
+              type: u.role, // Use 'role' from API
+            });
+          });
+        });
+        realmUsers = realm.objects<User>('User');
+      } catch (err) {
+        // fallback: show empty or handle error
+        console.error('Failed to fetch users from API', err);
+      }
     }
     setUsers(Array.from(realmUsers));
   };
@@ -102,7 +90,11 @@ export default function UserListScreen() {
   const getFilteredUsers = (tabType: 'All' | 'Admin' | 'Manager') => {
     return users.filter(u => {
       const matchesTab = tabType === 'All' ? true : u.type === tabType;
-      const matchesSearch = search.trim() === '' || u.name.toLowerCase().includes(search.trim().toLowerCase());
+      const searchTerm = search.trim().toLowerCase();
+      const matchesSearch =
+        searchTerm === '' ||
+        u.name.toLowerCase().includes(searchTerm) ||
+        (u.type ? u.type.toLowerCase().includes(searchTerm) : false);
       return matchesTab && matchesSearch;
     });
   };
@@ -130,21 +122,24 @@ export default function UserListScreen() {
               renderSectionHeader={({ section: { title } }) => (
                 <Text style={styles.sectionHeader}>{title}</Text>
               )}
-              renderItem={({ item }) => (
-                <TouchableOpacity onPress={() => setEditUser(item)}>
-                  <View style={styles.userItemFlat}>
-                    <View style={styles.avatarFlat}>
-                      <Text style={styles.avatarFlatText}>{item.name.charAt(0).toUpperCase()}</Text>
+              renderItem={({ item }) => {
+                console.log('UserListScreen renderItem item:', item);
+                return (
+                  <TouchableOpacity onPress={() => setEditUser(item)}>
+                    <View style={styles.userItemFlat}>
+                      <View style={styles.avatarFlat}>
+                        <Text style={styles.avatarFlatText}>{item.name.charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.userNameFlat}>{item.name}</Text>
+                      </View>
+                      {item.type == 'Admin' && (
+                        <Text style={styles.userTypeFlat}>Admin</Text>
+                      )}
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.userNameFlat}>{item.name}</Text>
-                    </View>
-                    {item.type === 'Admin' && (
-                      <Text style={styles.userTypeFlat}>Admin</Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              )}
+                  </TouchableOpacity>
+                );
+              }}
               ListEmptyComponent={<Text style={styles.placeholder}>No users found.</Text>}
               style={{ width: '100%' }}
               refreshControl={
