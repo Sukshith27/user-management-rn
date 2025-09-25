@@ -89,12 +89,14 @@ export default function UserListScreen() {
 
   const getFilteredUsers = (tabType: 'All' | 'Admin' | 'Manager') => {
     return users.filter(u => {
-      const matchesTab = tabType === 'All' ? true : u.type === tabType;
+      // Normalize type to title case for comparison
+      const normalizedType = u.type ? (u.type.charAt(0).toUpperCase() + u.type.slice(1).toLowerCase()) : '';
+      const matchesTab = tabType === 'All' ? true : normalizedType === tabType;
       const searchTerm = search.trim().toLowerCase();
       const matchesSearch =
         searchTerm === '' ||
         u.name.toLowerCase().includes(searchTerm) ||
-        (u.type ? u.type.toLowerCase().includes(searchTerm) : false);
+        (normalizedType && normalizedType.toLowerCase().includes(searchTerm));
       return matchesTab && matchesSearch;
     });
   };
@@ -123,7 +125,8 @@ export default function UserListScreen() {
                 <Text style={styles.sectionHeader}>{title}</Text>
               )}
               renderItem={({ item }) => {
-                console.log('UserListScreen renderItem item:', item);
+                console.log('UserListScreen renderItem item:', JSON.parse(JSON.stringify(item)));
+
                 return (
                   <TouchableOpacity onPress={() => setEditUser(item)}>
                     <View style={styles.userItemFlat}>
@@ -133,9 +136,12 @@ export default function UserListScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.userNameFlat}>{item.name}</Text>
                       </View>
-                      {item.type == 'Admin' && (
+                      {item.type && item.type.toLowerCase() === 'admin' && (
                         <Text style={styles.userTypeFlat}>Admin</Text>
                       )}
+                      {/* {item.type && item.type.toLowerCase() === 'manager' && (
+                        <Text style={styles.userTypeFlat}>Manager</Text>
+                      )} */}
                     </View>
                   </TouchableOpacity>
                 );
